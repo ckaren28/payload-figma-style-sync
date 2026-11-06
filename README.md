@@ -1,67 +1,46 @@
-# Payload Blank Template
+# Payload + Figma style sync
 
-This template comes configured with the bare minimum to get started on anything you need.
+Pulls design decisions out of a Figma file and stores them in Payload CMS, so the site renders from the same values the designer set.
 
-## Quick start
+- **Color styles** become `colors` records (name, hex)
+- **Text styles** become `text-styles` records (font family, size, weight, line height)
+- **Top-level frames** are rendered by Figma as 2x PNGs and saved to `media`
+- **`/styleguide`** renders all three straight from the database
 
-This template can be deployed directly from our Cloud hosting and it will setup MongoDB and cloud S3 object storage for media.
-
-## Quick Start - local setup
-
-To spin up this template locally, follow these steps:
-
-### Clone
-
-After you click the `Deploy` button above, you'll want to have standalone copy of this repo on your machine. If you've already cloned this repo, skip to [Development](#development).
-
-### Development
-
-1. First [clone the repo](#clone) if you have not done so already
-2. `cd my-project && cp .env.example .env` to copy the example environment variables. You'll need to add the `MONGODB_URL` from your Cloud project to your `.env` if you want to use S3 storage and the MongoDB database that was created for you.
-
-3. `pnpm install && pnpm dev` to install dependencies and start the dev server
-4. open `http://localhost:3000` to open the app in your browser
-
-That's it! Changes made in `./src` will be reflected in your app. Follow the on-screen instructions to login and create your first admin user. Then check out [Production](#production) once you're ready to build and serve your app, and [Deployment](#deployment) when you're ready to go live.
-
-#### Docker (Optional)
-
-If you prefer to use Docker for local development instead of a local MongoDB instance, the provided docker-compose.yml file can be used.
-
-To do so, follow these steps:
-
-- Modify the `MONGODB_URL` in your `.env` file to `mongodb://127.0.0.1/<dbname>`
-- Modify the `docker-compose.yml` file's `MONGODB_URL` to match the above `<dbname>`
-- Run `docker-compose up` to start the database, optionally pass `-d` to run in the background.
+Every record keeps its Figma ID (`figmaStyleId` or `figmaNodeId`), so re-running the import updates existing records instead of duplicating them.
 
 ## How it works
 
-The Payload config is tailored specifically to the needs of most websites. It is pre-configured in the following ways:
+`src/scripts/import-figma.ts`
 
-### Collections
+1. `GET /v1/files/:key` from the Figma REST API returns the whole document tree plus a `styles` map.
+2. A recursive `walk` visits every node. If a node uses a color or text style, the style's name and values are read off that node and saved (Figma stores style values on the layers that use them, not on the style, so a style only imports if it is applied to at least one layer).
+3. Figma colors arrive as 0–1 channels and are converted to hex.
+4. Top-level frames are sent to `GET /v1/images/:key`, which returns a temporary URL per frame; each PNG is downloaded and uploaded to the `media` collection.
 
-See the [Collections](https://payloadcms.com/docs/configuration/collections) docs for details on how to extend this functionality.
+## Setup
 
-- #### Users (Authentication)
+```bash
+npm install
+cp .env.example .env   # then fill in the values below
+npm run dev            # http://localhost:3000/admin, create the first user
+```
 
-  Users are auth-enabled collections that have access to the admin panel.
+| Variable | What it is |
+| --- | --- |
+| `DATABASE_URL` | `file:./payload-figma-starter.db` (local SQLite) |
+| `PAYLOAD_SECRET` | any long random string |
+| `FIGMA_TOKEN` | personal access token, Figma → Settings → Security |
+| `FIGMA_FILE_KEY` | the part of the file URL after `/design/` |
 
-  For additional help, see the official [Auth Example](https://github.com/payloadcms/payload/tree/3.x/examples/auth) or the [Authentication](https://payloadcms.com/docs/authentication/overview#authentication-overview) docs.
+## Run the import
 
-- #### Media
+```bash
+npx payload run src/scripts/import-figma.ts
+```
 
-  This is the uploads enabled collection. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
+Then open `/admin` to see the records, or `/styleguide` to see them rendered.
 
-### Docker
+## Built with
 
-Alternatively, you can use [Docker](https://www.docker.com) to spin up this template locally. To do so, follow these steps:
-
-1. Follow [steps 1 and 2 from above](#development), the docker-compose file will automatically use the `.env` file in your project root
-1. Next run `docker-compose up`
-1. Follow [steps 4 and 5 from above](#development) to login and create your first admin user
-
-That's it! The Docker instance will help you get up and running quickly while also standardizing the development environment across your teams.
-
-## Questions
-
-If you have any issues or questions, reach out to us on [Discord](https://discord.com/invite/payload) or start a [GitHub discussion](https://github.com/payloadcms/payload/discussions).
+Payload 3, Next.js, SQLite, the Figma REST API.
